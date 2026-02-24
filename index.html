@@ -70,8 +70,12 @@
         <nav class="flex-1 p-4 space-y-3 overflow-y-auto custom-scroll">
             <button onclick="showScreen('dash'); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-blue-900/40 hover:bg-blue-800 transition text-sm font-bold text-white" title="Visão geral de riscos e carteira de clientes"><i class="fas fa-chart-pie w-5"></i> Dashboard</button>
             <div class="h-px bg-blue-900/50 my-4"></div>
+            
             <button onclick="promptImport(); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-blue-600 hover:bg-blue-500 transition font-black text-xs text-white shadow-lg" title="Atualiza o banco de dados importando um arquivo .CSV (Requer senha de Admin)"><i class="fas fa-file-import w-5"></i> IMPORTAR CSV</button>
             <input type="file" id="csvInput" class="hidden" accept=".csv">
+            
+            <button onclick="exportToCSV(); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition font-black text-xs text-white shadow-lg" title="Baixa toda a base de dados atual para o seu computador no formato Excel/CSV"><i class="fas fa-file-export w-5"></i> EXPORTAR DADOS</button>
+
             <button onclick="verificarSenhaCadastro(); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition font-black text-xs text-white shadow-lg" title="Abre o formulário para incluir um novo cliente na base (Requer senha de Admin)"><i class="fas fa-plus-circle w-5"></i> NOVO CLIENTE</button>
         </nav>
         <div class="p-4 border-t border-blue-900/50 text-center">
@@ -398,7 +402,7 @@
         let cloudDB = { fullData: [], studies: {} };
         let currentClientData = null; 
         let currentClientIndex = -1; 
-        let fChart, rChart, pChart; // pChart = Pizza Chart
+        let fChart, rChart, pChart; 
         let passwordModalCallback = null;
 
         const fullMonths = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -475,7 +479,6 @@
         async function doLogin() {
             const pass = document.getElementById('loginPassword').value;
             
-            // Verifica se a senha digitada é válida no Front-end
             if(pass !== VISITOR_PASS && pass !== ADMIN_PASS) { 
                 document.getElementById('loginErrorMsg').classList.remove('hidden');
                 return; 
@@ -483,7 +486,6 @@
             
             setCloudLoading(true, "Conectando ao banco...");
             try {
-                // TRUQUE: Se for admin, envia 1910. Se for visitante, envia 2408 (que é o que o Drive conhece)
                 const senhaBackend = (pass === ADMIN_PASS) ? ADMIN_PASS : "2408";
                 
                 const res = await fetch(`${API_URL}?senha=${senhaBackend}&t=${new Date().getTime()}`);
@@ -494,7 +496,7 @@
                 
                 const sidebar = document.getElementById('appSidebar');
                 sidebar.classList.remove('hidden');
-                sidebar.classList.add('flex'); // Add flex base for sidebar content
+                sidebar.classList.add('flex'); 
                 
                 document.getElementById('appMain').classList.remove('hidden');
                 atualizarMenuQA(); atualizarFiltroMeses(); applyFilters();
@@ -510,6 +512,27 @@
                 await fetch(API_URL, { method: 'POST', body: JSON.stringify({ senha: ADMIN_PASS, bancoDeDados: cloudDB }), mode: 'no-cors' });
                 setCloudLoading(false); return true;
             } catch(e) { setCloudLoading(false); return false; }
+        }
+
+        // --- SISTEMA DE EXPORTAÇÃO CSV ---
+        function exportToCSV() {
+            if (!cloudDB.fullData || cloudDB.fullData.length === 0) {
+                alert("Não há dados na base para exportar.");
+                return;
+            }
+            try {
+                const csv = Papa.unparse(cloudDB.fullData);
+                const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `sentinel_backup_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch(err) {
+                alert("Erro ao exportar o arquivo CSV: " + err);
+            }
         }
 
         // --- MANIPULAÇÃO DE DATAS E NÚMEROS ---
