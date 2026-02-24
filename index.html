@@ -470,24 +470,33 @@
 
         async function doLogin() {
             const pass = document.getElementById('loginPassword').value;
+            
+            // Verifica se a senha digitada é válida no Front-end
             if(pass !== VISITOR_PASS && pass !== ADMIN_PASS) { 
                 document.getElementById('loginErrorMsg').classList.remove('hidden');
                 return; 
             }
+            
             setCloudLoading(true, "Conectando ao banco...");
             try {
-                const res = await fetch(`${API_URL}?senha=${pass === ADMIN_PASS ? ADMIN_PASS : VISITOR_PASS}&t=${new Date().getTime()}`);
+                // TRUQUE: Se for admin, envia 1910. Se for visitante, envia 2408 (que é o que o Drive conhece)
+                const senhaBackend = (pass === ADMIN_PASS) ? ADMIN_PASS : "2408";
+                
+                const res = await fetch(`${API_URL}?senha=${senhaBackend}&t=${new Date().getTime()}`);
                 cloudDB = await res.json();
                 if(!cloudDB.studies) cloudDB.studies = {};
+                
                 document.getElementById('loginScreen').classList.add('hidden');
                 
                 const sidebar = document.getElementById('appSidebar');
                 sidebar.classList.remove('hidden');
-                sidebar.classList.add('flex');
+                sidebar.classList.add('flex'); // Add flex base for sidebar content
                 
                 document.getElementById('appMain').classList.remove('hidden');
                 atualizarMenuQA(); atualizarFiltroMeses(); applyFilters();
-            } catch(e) { alert("Erro de conexão com Drive."); }
+            } catch(e) { 
+                alert("Erro de conexão com o Banco de Dados. Verifique o console."); 
+            }
             setCloudLoading(false);
         }
 
@@ -499,7 +508,7 @@
             } catch(e) { setCloudLoading(false); return false; }
         }
 
-        // --- MANIPULAÇÃO DE DATAS ---
+        // --- MANIPULAÇÃO DE DATAS E NÚMEROS ---
         function cleanNum(v) { 
             if (typeof v === 'number') return v;
             if (!v) return 0;
@@ -809,6 +818,8 @@ ${raw.substring(0, 800)}...`;
                 
                 cloudDB.studies[getVal(currentClientData, 'cliente')] = dossie;
                 document.getElementById('detEstudo').innerText = dossie;
+                
+                // Limpeza requisitada
                 document.getElementById('aiInput').value = '';
 
                 await saveToCloud(); btn.innerHTML = 'DOSSIÊ GRAVADO';
@@ -860,7 +871,6 @@ ${raw.substring(0, 800)}...`;
         }
         
         function promptImport() { 
-            // Inverte a ordem para não sofrer bloqueio do navegador
             document.getElementById('csvInput').value = '';
             document.getElementById('csvInput').click(); 
         }
