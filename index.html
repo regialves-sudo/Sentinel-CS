@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logcomex Sentinel CS | Enterprise 360</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { 
+            --log-navy: #001D3D; 
+            --log-blue: #003566; 
+            color-scheme: light; 
+        }
+        body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; overflow: hidden; }
+        .bg-log-navy { background-color: var(--log-navy); }
+        .hidden { display: none !important; }
+        
+        /* Custom Scrollbars */
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        #cloudLoading, #cadastroModal, #passwordModal { backdrop-filter: blur(4px); z-index: 12000; }
+        .spinner { border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid #fff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        select optgroup { font-weight: bold; color: var(--log-navy); }
+        .cb-container { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #334155; cursor: pointer; }
+        .cb-container input { width: 14px; height: 14px; cursor: pointer; accent-color: #059669; }
+        [title] { cursor: help; }
+        input[title], select[title], button[title], .cb-container { cursor: pointer; }
+        input, select, textarea { color-scheme: light; }
+    </style>
+</head>
+<body class="flex h-screen relative w-full">
+
+    <div id="loginScreen" class="fixed inset-0 bg-log-navy z-[15000] flex flex-col justify-center items-center text-white p-4 sm:p-6">
+        <div class="bg-white/10 p-8 sm:p-10 rounded-3xl sm:rounded-[40px] backdrop-blur-xl text-center max-w-sm w-full border border-white/20 shadow-2xl">
+            <h1 class="text-3xl sm:text-4xl font-black mb-1 uppercase tracking-tighter" title="Plataforma de Customer Success">Logcomex <span class="text-blue-400">CS</span></h1>
+            <p class="text-[10px] sm:text-xs text-blue-300 mb-8 font-bold tracking-widest uppercase text-center">Cloud Secure Persistent</p>
+            
+            <div class="relative w-full mb-4">
+                <input type="password" id="loginPassword" class="w-full px-6 py-4 rounded-2xl bg-white text-slate-900 text-center font-bold outline-none focus:ring-4 focus:ring-blue-500 border border-slate-200" placeholder="DIGITE SUA SENHA" title="Insira sua senha de acesso (Visitante ou Admin)">
+                <button type="button" onclick="toggleVisibility('loginPassword', 'eyeIconLogin')" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 focus:outline-none transition-colors p-2" title="Revelar/Ocultar Senha">
+                    <i id="eyeIconLogin" class="fas fa-eye text-lg"></i>
+                </button>
+            </div>
+            
+            <button onclick="doLogin()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition shadow-lg mt-2" title="Clique ou pressione Enter para acessar">CONECTAR DRIVE</button>
+            <p id="loginErrorMsg" class="text-red-400 text-xs mt-4 hidden font-bold">Senha incorreta.</p>
+        </div>
+    </div>
+
+    <div id="cloudLoading" class="fixed inset-0 bg-slate-900/90 hidden flex flex-col justify-center items-center text-white z-[20000]">
+        <div class="spinner mb-4"></div>
+        <h2 id="loadingText" class="text-sm font-bold tracking-widest uppercase text-blue-300">Sincronizando...</h2>
+    </div>
+
+    <div id="sidebarBackdrop" class="fixed inset-0 bg-slate-900/60 z-[10400] hidden md:hidden" onclick="closeSidebarMobile()"></div>
+
+    <aside id="appSidebar" class="bg-log-navy text-white flex-col shadow-2xl z-[10500] flex-shrink-0 absolute md:relative w-72 md:w-64 h-full transform -translate-x-full md:translate-x-0 transition-transform duration-300 hidden">
+        <div class="p-6 md:p-8 border-b border-blue-900 flex justify-between items-center">
+            <div class="text-center w-full">
+                <h1 class="text-xl md:text-2xl font-black uppercase tracking-tighter" title="Central de Gestão de Risco">Sentinel <span class="text-blue-400">CS</span></h1>
+            </div>
+            <button onclick="closeSidebarMobile()" class="md:hidden text-blue-300 hover:text-white p-2 text-xl"><i class="fas fa-times"></i></button>
+        </div>
+        <nav class="flex-1 p-4 space-y-3 overflow-y-auto custom-scroll">
+            <button onclick="showScreen('dash'); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-blue-900/40 hover:bg-blue-800 transition text-sm font-bold text-white" title="Visão geral de riscos e carteira de clientes"><i class="fas fa-chart-pie w-5"></i> Dashboard</button>
+            <div class="h-px bg-blue-900/50 my-4"></div>
+            <button onclick="promptImport(); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-blue-600 hover:bg-blue-500 transition font-black text-xs text-white shadow-lg" title="Atualiza o banco de dados importando um arquivo .CSV (Requer senha de Admin)"><i class="fas fa-file-import w-5"></i> IMPORTAR CSV</button>
+            <input type="file" id="csvInput" class="hidden" accept=".csv">
+            <button onclick="verificarSenhaCadastro(); closeSidebarMobile()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition font-black text-xs text-white shadow-lg" title="Abre o formulário para incluir um novo cliente na base (Requer senha de Admin)"><i class="fas fa-plus-circle w-5"></i> NOVO CLIENTE</button>
+        </nav>
+        <div class="p-4 border-t border-blue-900/50 text-center">
+            <button onclick="resetSystem(); closeSidebarMobile()" class="text-[10px] text-red-400 font-bold uppercase w-full p-3 border border-red-900/50 rounded-lg hover:bg-red-900/20 transition" title="Apaga permanentemente todos os registros do banco (Ação irreversível)">RESETAR BANCO</button>
+        </div>
+    </aside>
+
+    <main id="appMain" class="flex-1 flex flex-col hidden overflow-hidden w-full relative">
+        
+        <header class="bg-white border-b flex flex-col md:flex-row items-center justify-between px-4 md:px-8 py-3 md:py-0 min-h-[4rem] z-10 shadow-sm flex-shrink-0 gap-3 md:gap-0">
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 text-2xl p-1 focus:outline-none" title="Abrir Menu">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="flex items-center gap-2 flex-1 md:flex-none">
+                    <select id="quarterFilter" onchange="applyFilters()" class="bg-slate-50 border border-slate-200 text-slate-700 px-2 py-2 md:px-4 md:py-2 rounded-lg text-[10px] md:text-xs font-black outline-none uppercase w-1/2 md:w-auto" title="Filtre os dados exibidos por um trimestre específico (Q1 a Q4)">
+                        <option value="ALL">TODOS QUARTERS</option><option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option><option value="Q4">Q4</option>
+                    </select>
+                    <select id="monthFilter" onchange="applyFilters()" class="bg-slate-50 border border-slate-200 text-slate-700 px-2 py-2 md:px-4 md:py-2 rounded-lg text-[10px] md:text-xs font-black outline-none uppercase w-1/2 md:w-auto" title="Filtre os dados exibidos pelo Mês Sem Faturamento">
+                        <option value="ALL">TODOS OS MESES</option>
+                    </select>
+                </div>
+            </div>
+            <div class="relative w-full md:w-72 mt-2 md:mt-0">
+                <input type="text" id="searchInput" onkeyup="applyFilters()" placeholder="Filtrar cliente, Q.A ou Causa..." class="bg-slate-50 border border-slate-200 text-slate-700 rounded-full pl-10 pr-4 py-2.5 md:py-2 text-xs w-full outline-none focus:ring-2 focus:ring-blue-500" title="Busque livremente por Nome do Cliente, Responsável Q.A. ou Causa Raiz">
+                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            </div>
+        </header>
+
+        <div id="scrollContainer" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 custom-scroll">
+            
+            <div id="dashScreen" class="space-y-6 md:space-y-8">
+                <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+                    <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border shadow-sm"><p class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase mb-1" title="Somatório total do valor estimado de risco financeiro">Previsão Perda</p><p id="kpiPrev" class="text-lg md:text-2xl font-black text-slate-800">R$ 0,00</p></div>
+                    <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border-l-4 border-l-green-500 shadow-sm"><p class="text-[9px] md:text-[10px] font-black text-green-600 uppercase tracking-widest mb-1" title="Somatório do valor financeiro que já foi revertido/salvo">Recuperado</p><p id="kpiRev" class="text-lg md:text-2xl font-black text-slate-800">R$ 0,00</p></div>
+                    <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border-l-4 border-l-red-500 shadow-sm"><p class="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-widest mb-1" title="Diferença entre o risco total e o que foi recuperado (Risco residual)">Perda Efetiva</p><p id="kpiLoss" class="text-lg md:text-2xl font-black text-slate-800">R$ 0,00</p></div>
+                    <div class="bg-indigo-50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-indigo-100 shadow-sm"><p class="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1" title="Projeção baseada na tendência futura (ex: 12% do total)">Projeção Q</p><p id="kpiProj" class="text-lg md:text-2xl font-black text-indigo-900">R$ 0,00</p></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                    <div class="bg-white p-4 md:p-8 rounded-2xl md:rounded-[35px] border h-72 md:h-80 flex flex-col shadow-sm w-full">
+                        <h3 class="text-[10px] md:text-xs font-black text-slate-400 uppercase mb-4 tracking-widest" title="Distribuição gráfica do risco financeiro agrupado por trimestres do ano">Impacto Financeiro / Quarter</h3>
+                        <div class="flex-1 relative w-full"><canvas id="chartFinance"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 md:p-8 rounded-2xl md:rounded-[35px] border h-72 md:h-80 flex flex-col shadow-sm w-full">
+                        <h3 class="text-[10px] md:text-xs font-black text-slate-400 uppercase mb-4 tracking-widest" title="Visão cronológica de evolução do risco de perda financeira ao longo dos meses">Previsão / Mês s/ Faturamento</h3>
+                        <div class="flex-1 relative w-full"><canvas id="chartLossByMonth"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl md:rounded-[35px] border overflow-x-auto shadow-sm custom-scroll mb-10">
+                    <table class="w-full text-left min-w-[800px]">
+                        <thead class="bg-slate-50 text-[10px] font-black uppercase border-b text-slate-400 tracking-widest">
+                            <tr>
+                                <th class="px-6 py-5" title="Trimestre de referência da tratativa (Ex: Q1, Q2)">Q</th>
+                                <th class="px-6 py-5" title="Nome oficial do cliente monitorado">Cliente</th>
+                                <th class="px-6 py-5" title="Nome do Analista / Quality Assurance responsável">Q.A.</th>
+                                <th class="px-6 py-5" title="Mês e Ano de referência">Mês Ref.</th>
+                                <th class="px-6 py-5" title="Fase atual de execução ou desfecho da tratativa">Status</th>
+                                <th class="px-6 py-5" title="Valor estimado de risco de perda financeira">Previsão</th>
+                                <th class="px-6 py-5 text-right" title="Ações disponíveis para o registro">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="detailScreen" class="hidden space-y-6 pb-10">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <button onclick="showScreen('dash')" class="w-full sm:w-auto justify-center text-blue-600 hover:text-blue-800 font-black text-xs uppercase flex items-center gap-2 transition bg-white px-5 py-3 rounded-xl border shadow-sm" title="Voltar para a tela de relatórios e painel principal"><i class="fas fa-arrow-left"></i> Voltar</button>
+                    <button onclick="abrirEdicao()" class="w-full sm:w-auto justify-center text-slate-600 hover:text-blue-600 font-black text-xs uppercase flex items-center gap-2 transition bg-white px-5 py-3 rounded-xl border shadow-sm" title="Abra o formulário para atualizar as informações deste cliente (Exige senha)"><i class="fas fa-edit"></i> Editar Cadastro</button>
+                </div>
+                
+                <div class="bg-white rounded-2xl md:rounded-[35px] border shadow-sm overflow-hidden">
+                    
+                    <div class="bg-log-navy p-6 md:p-8 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div class="w-full sm:w-auto">
+                            <p class="text-blue-300 font-bold tracking-widest text-[10px] sm:text-xs mb-1 uppercase" title="Visão aprofundada dos dados e histórico de tratativa do cliente">Ficha Completa</p>
+                            <h2 id="detNome" class="text-2xl sm:text-3xl font-black tracking-tighter break-words" title="Nome oficial do cliente">Nome</h2>
+                        </div>
+                        <div class="text-left sm:text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                            <span class="sm:hidden text-white font-black text-xl mr-4" id="detQMobile">-</span>
+                            <span id="detStatusBadge" class="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border" title="Fase atual da tratativa (Em Andamento, Revertido, Finalizado, Ativo)">STATUS</span>
+                        </div>
+                    </div>
+                    
+                    <div class="px-6 md:px-8 pt-6 md:pt-8">
+                        <h3 class="text-[10px] md:text-xs font-black text-slate-400 uppercase mb-4 tracking-widest border-b border-slate-100 pb-2">Informações Base & Financeiro</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                            <div>
+                                <p class="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase mb-1" title="Analista / Quality Assurance responsável pela conta do cliente">Responsável Q.A.</p>
+                                <p id="detQA" class="text-xs md:text-sm font-bold text-slate-700">-</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase mb-1" title="Trimestre e Mês exato da base do registro">Quarter / Mês Ref.</p>
+                                <p id="detQMes" class="text-xs md:text-sm font-bold text-slate-700">-</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] md:text-[10px] text-red-500 font-bold uppercase mb-1" title="Montante financeiro de receita ameaçada">R$ Previsão Perda</p>
+                                <p id="detPrev" class="text-xs md:text-sm font-bold text-red-600">-</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] md:text-[10px] text-emerald-600 font-bold uppercase mb-1" title="Montante financeiro já garantido ou recuperado">R$ Recuperado</p>
+                                <p id="detRev" class="text-xs md:text-sm font-bold text-emerald-600">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="px-6 md:px-8 pt-6 md:pt-8">
+                        <h3 class="text-[10px] md:text-xs font-black text-slate-400 uppercase mb-4 tracking-widest border-b border-slate-100 pb-2">Perfil de Risco & Contexto</h3>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 bg-slate-50 p-4 md:p-6 rounded-xl md:rounded-2xl border border-slate-200">
+                            <div>
+                                <p class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase mb-1" title="Categoria macro de risco identificada (Ex: Mudança de Estratégia, Quebra na Jornada)">Fator de Risco Principal</p>
+                                <p id="detFator" class="text-xs md:text-sm font-black text-red-600">-</p>
+                                
+                                <p class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase mt-4 mb-1" title="Descrição complementar ou queixa exata reportada">Causa Raiz Complementar</p>
+                                <p id="detCausa" class="text-xs md:text-sm font-bold text-slate-700">-</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase mb-1" title="Ideal Customer Profile: O perfil do modelo de negócios do cliente">Perfil ICP</p>
+                                <p id="detICP" class="text-xs md:text-sm font-bold text-blue-600 leading-relaxed">-</p>
+                                
+                                <p class="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase mt-4 mb-1" title="Módulos, produtos ou plataformas impactadas na reclamação do cliente">Plataformas Afetadas</p>
+                                <p id="detPlats" class="text-xs md:text-sm font-bold text-indigo-600 leading-relaxed">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 rounded-xl md:rounded-2xl p-5 md:p-6 border border-blue-100 min-h-[250px] md:min-h-[350px] relative">
+                                <h4 class="text-[10px] md:text-xs font-black uppercase text-blue-500 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3" title="Dossiê gerado e salvo por Inteligência Artificial baseado na compilação do histórico CS">
+                                    Estudo de Caso (IA) 
+                                    <div class="flex gap-2 w-full sm:w-auto">
+                                        <button onclick="copiarDossie()" class="flex-1 sm:flex-none text-center text-blue-600 bg-white px-3 py-2 rounded-lg shadow-sm text-[10px] border font-bold hover:bg-blue-100 transition" title="Copia todo o texto do dossiê para a área de transferência (Ctrl+C)"><i class="fas fa-copy"></i> Copiar</button>
+                                        <button onclick="limparDossieUnico()" class="flex-1 sm:flex-none text-center text-red-500 bg-white px-3 py-2 rounded-lg shadow-sm text-[10px] border font-bold hover:bg-red-100 transition" title="Exclui o histórico de dossiê gerado e salvo (Exige Senha)"><i class="fas fa-trash"></i> Limpar</button>
+                                    </div>
+                                </h4>
+                                <div id="detEstudo" class="text-xs md:text-sm text-blue-900 whitespace-pre-line leading-relaxed font-medium italic">Aguardando geração...</div>
+                            </div>
+                        </div>
+                        <div class="bg-slate-900 rounded-xl md:rounded-3xl p-5 md:p-8 text-white shadow-xl flex flex-col">
+                            <h4 class="text-[10px] md:text-xs font-black text-blue-400 mb-2 md:mb-4 italic" title="Cole qualquer anotação bruta, histórico de ticket ou e-mails aqui para a IA sintetizar o Dossiê de Risco">Inteligência CS</h4>
+                            <p class="text-[10px] md:text-xs text-slate-400 mb-4 leading-relaxed">Insira notas brutas e gere a defesa oficial.</p>
+                            <textarea id="aiInput" class="flex-1 w-full bg-slate-800 border-none rounded-xl md:rounded-2xl p-4 text-xs md:text-sm min-h-[120px] outline-none mb-4 text-white focus:ring-2 focus:ring-blue-500 custom-scroll" placeholder="Cole o histórico aqui para gerar a defesa..." title="Área de transferência de texto bruto"></textarea>
+                            <button id="aiBtn" onclick="generateAIAnalysis()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase shadow-lg transition-all" title="Processa o texto usando a IA da plataforma e salva um resumo estratégico no Drive">GERAR ESTUDO COM IA</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="cadastroModal" class="fixed inset-0 bg-slate-900/60 hidden flex justify-center items-center z-[11000] p-4">
+        <div class="bg-white rounded-3xl md:rounded-[40px] w-full max-w-3xl p-6 md:p-8 shadow-2xl relative overflow-y-auto custom-scroll max-h-[95vh] mt-4 mb-4">
+            <button onclick="fecharModal()" class="absolute top-4 right-4 md:top-6 md:right-6 text-slate-400 hover:text-red-500 transition p-2" title="Fechar Janela"><i class="fas fa-times text-xl"></i></button>
+            <h2 id="modalTitle" class="text-xl md:text-2xl font-black uppercase mb-4 md:mb-6 tracking-tighter text-slate-800 border-b pb-4 pr-8">Nova Ficha Sentinel</h2>
+            <form id="cadastroForm" onsubmit="salvarCliente(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+                
+                <div class="sm:col-span-2">
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="Nome empresarial e oficial do cliente">Cliente *</label>
+                    <input type="text" id="cad_cliente" required class="w-full mt-1 bg-white border-slate-200 border rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="Nome ou responsável de Quality Assurance designado">Q.A. *</label>
+                    <input type="text" id="cad_qa" list="qa_list" required class="w-full mt-1 bg-white border-slate-200 border rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm text-slate-700 outline-none focus:border-blue-500">
+                    <datalist id="qa_list"></datalist>
+                </div>
+                
+                <div>
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="A fase atual do plano de ação deste cliente">Execução (Status)</label>
+                    <select id="cad_status" class="w-full mt-1 bg-white border-slate-200 border rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm text-slate-700 outline-none focus:border-blue-500">
+                        <option value="ATIVO">ATIVO</option>
+                        <option value="EM ANDAMENTO">EM ANDAMENTO</option>
+                        <option value="FINALIZADO">FINALIZADO</option>
+                        <option value="REVERTIDO">REVERTIDO</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="O mês/ano exato que aponta quando o faturamento sofreu o impacto">Mês Referência *</label>
+                    <input type="date" id="cad_mes" required onchange="autoCalcularQuarter()" class="w-full mt-1 bg-white border-slate-200 border rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm text-slate-700 outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="Preenchido automaticamente com base no Mês Referência selecionado">Quarter (Auto)</label>
+                    <input type="text" id="cad_quarter" readonly class="w-full mt-1 bg-slate-100 border-slate-200 border rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm font-black text-blue-600 outline-none cursor-not-allowed">
+                </div>
+                
+                <div class="sm:col-span-2">
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="A classificação raiz principal que agrupa o risco reportado">Fator de Risco Principal</label>
+                    <select id="cad_fator" class="w-full mt-1 bg-white border border-slate-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm text-slate-700 outline-none focus:border-blue-500 custom-scroll">
+                        <option value="">Selecione a categoria de risco...</option>
+                        <optgroup label="[Escopo não aderente]">
+                            <option value="Plano ofertado contém menos do que o cliente precisa">Plano ofertado contém menos do que o cliente precisa</option>
+                            <option value="Plano ofertado contém mais do que o cliente precisa">Plano ofertado contém mais do que o cliente precisa</option>
+                            <option value="Não há necessidade de contratação recorrente">Não há necessidade de contratação recorrente</option>
+                            <option value="Caso de uso finito">Caso de uso finito</option>
+                        </optgroup>
+                        <optgroup label="[ROI não validado pelo Cliente]">
+                            <option value="Falta de clareza no ROI">Falta de clareza no ROI</option>
+                            <option value="Sem relacionamento com decisor">Sem relacionamento com decisor</option>
+                            <option value="Não atingimento de ROI">Não atingimento de ROI</option>
+                            <option value="Redução do reajuste da renovação">Redução do reajuste da renovação</option>
+                            <option value="Sem equipe para usar o sistema">Sem equipe para usar o sistema</option>
+                        </optgroup>
+                        <optgroup label="[Perfil do Cliente]">
+                            <option value="ICP">ICP</option>
+                            <option value="Maturidade - Inicial">Maturidade - Inicial</option>
+                        </optgroup>
+                        <optgroup label="[Mudança de Estratégia]">
+                            <option value="Fusão / Falência">Fusão / Falência</option>
+                            <option value="Mudança de estratégia de mercado">Mudança de estratégia de mercado</option>
+                        </optgroup>
+                        <optgroup label="[Expectativa de Produto]">
+                            <option value="BUG - NCM">BUG - NCM</option>
+                            <option value="BUG - Shipment">BUG - Shipment</option>
+                            <option value="BUG - Logtracking">BUG - Logtracking</option>
+                            <option value="BUG - Logautomation">BUG - Logautomation</option>
+                            <option value="BUG - Catálogo de produtos">BUG - Catálogo de produtos</option>
+                            <option value="BUG - Logmanager">BUG - Logmanager</option>
+                            <option value="BUG - LogOS">BUG - LogOS</option>
+                            <option value="Expectativa de funcionalidade que o produto não tem">Expectativa de funcionalidade que o produto não tem</option>
+                        </optgroup>
+                        <optgroup label="[Quebra na Jornada]">
+                            <option value="Cliente não conectou APIs necessárias para utilizar o produto">Cliente não conectou APIs necessárias para utilizar o produto</option>
+                            <option value="Não inseriu o certificado na plataforma">Não inseriu o certificado na plataforma</option>
+                        </optgroup>
+                        <optgroup label="[Dados]">
+                            <option value="Perda de fonte de consulta de dados">Perda de fonte de consulta de dados</option>
+                            <option value="Baixa cobertura de dados">Baixa cobertura de dados</option>
+                            <option value="Baixa granularidade de NCM">Baixa granularidade de NCM</option>
+                            <option value="Expectativa de cobertura de 100% dos dados">Expectativa de cobertura de 100% dos dados</option>
+                            <option value="Desconfiança de dados">Desconfiança de dados</option>
+                        </optgroup>
+                        <optgroup label="[Políticas Logcomex]">
+                            <option value="Cliente Inadimplente">Cliente Inadimplente</option>
+                            <option value="Cliente Suspenso">Cliente Suspenso</option>
+                            <option value="Cliente com risco de venda ou compartilhamento de dados">Cliente com risco de venda ou compartilhamento de dados</option>
+                            <option value="Sales Churn">Sales Churn</option>
+                            <option value="Variação Cambial">Variação Cambial</option>
+                            <option value="Perdas de Expansão">Perdas de Expansão</option>
+                            <option value="Migração">Migração</option>
+                            <option value="Alteração de Features">Alteração de Features</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="Texto livre ou motivo de cancelamento registrado na tratativa">Causa Raiz Complementar (Opcional)</label>
+                    <input type="text" id="cad_causa" class="w-full mt-1 bg-white border-slate-200 border rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm text-slate-700 outline-none focus:border-blue-500">
+                </div>
+                
+                <div class="sm:col-span-2 mt-2">
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="Selecione as plataformas e módulos de produto afetados por este risco">Plataformas Afetadas</label>
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3 mt-2 bg-slate-50 text-slate-700 p-3 md:p-4 rounded-xl border border-slate-200">
+                        <label class="cb-container" title="Plataforma de Catálogo de Produtos"><input type="checkbox" class="cb-plat" value="Catálogo"> Catálogo</label>
+                        <label class="cb-container" title="Plataforma de Gestão de Embarques"><input type="checkbox" class="cb-plat" value="Logmanager"> Logmanager</label>
+                        <label class="cb-container" title="Sistema Operacional Logístico"><input type="checkbox" class="cb-plat" value="LogOS"> LogOS</label>
+                        <label class="cb-container" title="Rastreamento Logístico"><input type="checkbox" class="cb-plat" value="LogTracking"> LogTracking</label>
+                        <label class="cb-container" title="Inteligência NCM"><input type="checkbox" class="cb-plat" value="NCM Intel"> NCM Intel</label>
+                        <label class="cb-container" title="Gestão Shipment"><input type="checkbox" class="cb-plat" value="Shipment"> Shipment</label>
+                    </div>
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase" title="Ideal Customer Profile (Marque as opções condizentes com o negócio do cliente)">Perfil ICP</label>
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3 mt-2 bg-slate-50 text-slate-700 p-3 md:p-4 rounded-xl border border-slate-200">
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Agente de carga"> Agente de carga</label>
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Comissária"> Comissária</label>
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Consultoria"> Consultoria</label>
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Exportador"> Exportador</label>
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Importador"> Importador</label>
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Industria"> Industria</label>
+                        <label class="cb-container"><input type="checkbox" class="cb-icp" value="Trade"> Trade</label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[9px] md:text-[10px] font-black text-red-500 uppercase" title="Qual o montante financeiro da previsão do alerta gerado?">R$ Previsão Perda</label>
+                    <input type="number" step="0.01" id="cad_prev" class="w-full mt-1 bg-red-50 text-red-700 border border-red-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm font-bold outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500">
+                </div>
+                <div>
+                    <label class="text-[9px] md:text-[10px] font-black text-emerald-600 uppercase" title="Até o momento, qual valor já foi salvo ou efetivamente revertido?">R$ Recuperado</label>
+                    <input type="number" step="0.01" id="cad_rev" class="w-full mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-3 text-xs md:text-sm font-bold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                </div>
+                
+                <div class="sm:col-span-2 mt-4">
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl md:rounded-2xl shadow-lg transition-all uppercase text-[10px] md:text-xs tracking-widest" title="Salva permanentemente a ficha atual no banco de dados na nuvem">GRAVAR FICHA NO DRIVE</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="passwordModal" class="fixed inset-0 bg-slate-900/80 hidden flex justify-center items-center z-[13000] p-4">
+        <div class="bg-white rounded-2xl md:rounded-3xl w-full max-w-sm p-6 md:p-8 shadow-2xl relative">
+            <button onclick="closePasswordModal()" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition p-2" title="Fechar Janela"><i class="fas fa-times text-xl"></i></button>
+            <h3 class="text-lg md:text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter" title="Área restrita de segurança">Autenticação</h3>
+            <p id="pwdModalMessage" class="text-[10px] md:text-xs text-slate-500 mb-6 font-bold">Por favor, insira a senha para continuar.</p>
+            
+            <div class="relative w-full mb-6">
+                <input type="password" id="pwdModalInput" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="Digite a senha" title="Insira a senha de administrador">
+                <button type="button" onclick="toggleVisibility('pwdModalInput', 'pwdModalEye')" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 focus:outline-none transition-colors p-2" title="Revelar/Ocultar Senha">
+                    <i id="pwdModalEye" class="fas fa-eye"></i>
+                </button>
+            </div>
+            
+            <div class="flex gap-2 md:gap-3">
+                <button onclick="closePasswordModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-lg md:rounded-xl transition text-[10px] md:text-xs uppercase tracking-widest" title="Cancelar operação">Cancelar</button>
+                <button onclick="submitPasswordModal()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-lg md:rounded-xl shadow-md transition text-[10px] md:text-xs uppercase tracking-widest" title="Confirmar senha e avançar">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbzcSvZi9flPBJpKCi9MZlq14xjOC2GTFmNT78vCNVoOcEJa75PXHZhqLeuB3msc1_RR/exec";
+        const ADMIN_PASS = "1910"; 
+        const VISITOR_PASS = "LogCs2026";
+        
+        let cloudDB = { fullData: [], studies: {} };
+        let currentClientData = null; 
+        let currentClientIndex = -1; 
+        let fChart, rChart;
+        let passwordModalCallback = null;
+
+        const fullMonths = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+        const shortMonths = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+        // Reconectando o ouvinte do input de arquivo
+        document.getElementById('csvInput').addEventListener('change', handleFileUpload);
+
+        // --- SISTEMA RESPONSIVO (SIDEBAR) ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('appSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        function closeSidebarMobile() {
+            if(window.innerWidth < 768) {
+                document.getElementById('appSidebar').classList.add('-translate-x-full');
+                document.getElementById('sidebarBackdrop').classList.add('hidden');
+            }
+        }
+
+        // --- SISTEMA DE MODAL DE SENHA ---
+        function requestPassword(message, callback) {
+            document.getElementById('pwdModalMessage').innerText = message;
+            document.getElementById('pwdModalInput').value = '';
+            document.getElementById('pwdModalInput').type = 'password';
+            document.getElementById('pwdModalEye').className = 'fas fa-eye';
+            document.getElementById('passwordModal').classList.remove('hidden');
+            passwordModalCallback = callback;
+            setTimeout(() => document.getElementById('pwdModalInput').focus(), 100);
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.add('hidden');
+        }
+
+        function submitPasswordModal() {
+            const pwd = document.getElementById('pwdModalInput').value;
+            const cb = passwordModalCallback; 
+            closePasswordModal();
+            passwordModalCallback = null; 
+            if(cb) cb(pwd); 
+        }
+
+        document.getElementById('pwdModalInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') submitPasswordModal();
+        });
+
+        document.getElementById('loginPassword').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doLogin();
+        });
+
+        function toggleVisibility(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        async function doLogin() {
+            const pass = document.getElementById('loginPassword').value;
+            if(pass !== VISITOR_PASS && pass !== ADMIN_PASS) { 
+                document.getElementById('loginErrorMsg').classList.remove('hidden');
+                return; 
+            }
+            setCloudLoading(true, "Conectando ao banco...");
+            try {
+                const res = await fetch(`${API_URL}?senha=${pass === ADMIN_PASS ? ADMIN_PASS : VISITOR_PASS}&t=${new Date().getTime()}`);
+                cloudDB = await res.json();
+                if(!cloudDB.studies) cloudDB.studies = {};
+                document.getElementById('loginScreen').classList.add('hidden');
+                
+                const sidebar = document.getElementById('appSidebar');
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+                
+                document.getElementById('appMain').classList.remove('hidden');
+                atualizarMenuQA(); atualizarFiltroMeses(); applyFilters();
+            } catch(e) { alert("Erro de conexão com Drive."); }
+            setCloudLoading(false);
+        }
+
+        async function saveToCloud() {
+            setCloudLoading(true, "Salvando...");
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ senha: ADMIN_PASS, bancoDeDados: cloudDB }), mode: 'no-cors' });
+                setCloudLoading(false); return true;
+            } catch(e) { setCloudLoading(false); return false; }
+        }
+
+        // --- MANIPULAÇÃO DE DATAS ---
+        function cleanNum(v) { 
+            if (typeof v === 'number') return v;
+            if (!v) return 0;
+            let s = String(v).trim().replace(/[R$\s]/g,"");
+            if (s.includes(',')) {
+                s = s.replace(/\./g, "").replace(",", ".");
+            } else if ((s.match(/\./g) || []).length > 1) {
+                s = s.replace(/\./g, "");
+            }
+            return parseFloat(s) || 0; 
+        }
+
+        function parseDateData(raw) {
+            let s = String(raw || '').trim().toLowerCase();
+            let monthIdx = 0; let year = 2026;
+            
+            const matchISO = s.match(/^(\d{4})-(\d{2})/);
+            if(matchISO) { year = parseInt(matchISO[1]); monthIdx = parseInt(matchISO[2]) - 1; }
+            else {
+                const matchBR = s.match(/(\d{2})\/(\d{2,4})/);
+                if(matchBR) {
+                    let p1 = parseInt(matchBR[1]), p2 = parseInt(matchBR[2]);
+                    if(p2 > 1000) { monthIdx = p1 - 1; year = p2; }
+                    else { monthIdx = p2 - 1; year = 2026; }
+                } else {
+                    for(let i=0; i<12; i++) {
+                        if(s.includes(fullMonths[i]) || s.includes(shortMonths[i])) { monthIdx = i; break; }
+                    }
+                    const yrMatch = s.match(/\d{4}/);
+                    if(yrMatch) year = parseInt(yrMatch[0]);
+                    else { const yrMatch2 = s.match(/\d{2}/); if(yrMatch2) year = 2000 + parseInt(yrMatch2[0]); }
+                }
+            }
+            return { monthIdx: Math.max(0, Math.min(11, monthIdx)), year };
+        }
+
+        function formatarDataParaInput(raw) {
+            if(!raw || raw === 'N/A') return '';
+            const { monthIdx, year } = parseDateData(raw);
+            return `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+        }
+
+        function formatarDataTabela(raw) {
+            if(!raw || raw === 'N/A') return 'N/A';
+            const { monthIdx, year } = parseDateData(raw);
+            return `${shortMonths[monthIdx]} | ${String(year).slice(-2)}`;
+        }
+
+        function formatarDataFiltro(raw) {
+            if(!raw || raw === 'N/A') return 'N/A';
+            const { monthIdx, year } = parseDateData(raw);
+            return `${fullMonths[monthIdx]} | ${year}`;
+        }
+
+        function atualizarFiltroMeses() {
+            const rawMeses = [...new Set(cloudDB.fullData.map(r => getVal(r, 'mes')).filter(x => x && x !== 'N/A'))];
+            const parsed = rawMeses.map(r => ({ raw: r, parsed: parseDateData(r) }));
+            parsed.sort((a,b) => {
+                if(a.parsed.year !== b.parsed.year) return a.parsed.year - b.parsed.year;
+                return a.parsed.monthIdx - b.parsed.monthIdx;
+            });
+            const uniqueFiltro = []; const seen = new Set();
+            parsed.forEach(p => {
+                const fmt = `${fullMonths[p.parsed.monthIdx]} | ${p.parsed.year}`;
+                if(!seen.has(fmt)) { seen.add(fmt); uniqueFiltro.push(fmt); }
+            });
+            const filter = document.getElementById('monthFilter');
+            filter.innerHTML = '<option value="ALL">MÊS S/ FATURAMENTO (TODOS)</option>' + uniqueFiltro.map(m => `<option value="${m}">${m.toUpperCase()}</option>`).join('');
+        }
+
+        function autoCalcularQuarter() {
+            const val = document.getElementById('cad_mes').value;
+            if(!val) return;
+            const mes = parseInt(val.split('-')[1]);
+            const q = mes <= 3 ? "Q1" : mes <= 6 ? "Q2" : mes <= 9 ? "Q3" : "Q4";
+            document.getElementById('cad_quarter').value = q;
+        }
+
+        function atualizarMenuQA() {
+            const qas = [...new Set(cloudDB.fullData.map(r => getVal(r, 'qa')).filter(x => x))].sort();
+            document.getElementById('qa_list').innerHTML = qas.map(n => `<option value="${n}">`).join('');
+        }
+
+        // --- SEGURANÇA E CADASTRO / EDIÇÃO ---
+        function verificarSenhaCadastro() {
+            requestPassword("Autenticação necessária para registrar um novo cliente.", (pwd) => {
+                if(pwd === ADMIN_PASS) { 
+                    currentClientIndex = -1; // Modo Novo Cadastro
+                    document.getElementById('cadastroForm').reset();
+                    document.getElementById('modalTitle').innerText = "Nova Ficha Sentinel";
+                    document.querySelectorAll('.cb-plat, .cb-icp').forEach(cb => cb.checked = false);
+                    document.getElementById('cadastroModal').classList.remove('hidden'); 
+                }
+                else if(pwd) { alert("Acesso negado. Senha incorreta."); }
+            });
+        }
+
+        function abrirEdicao() {
+            requestPassword("Autenticação necessária para editar a ficha do cliente.", (pwd) => {
+                if(pwd === ADMIN_PASS) {
+                    try {
+                        document.getElementById('modalTitle').innerText = "Editar Ficha Sentinel";
+                        const r = currentClientData;
+                        
+                        document.getElementById('cad_cliente').value = getVal(r, 'cliente');
+                        document.getElementById('cad_qa').value = getVal(r, 'qa');
+                        
+                        const st = String(getVal(r, 'execucao') || 'ATIVO').toUpperCase().trim();
+                        const statusEl = document.getElementById('cad_status');
+                        if(Array.from(statusEl.options).some(o => o.value === st)) statusEl.value = st;
+                        else statusEl.value = 'ATIVO';
+
+                        document.getElementById('cad_mes').value = formatarDataParaInput(getVal(r, 'mes'));
+                        document.getElementById('cad_quarter').value = getVal(r, 'quarter');
+                        document.getElementById('cad_fator').value = String(getVal(r, 'fator') || '').trim();
+                        document.getElementById('cad_causa').value = getVal(r, 'motivo');
+                        document.getElementById('cad_prev').value = cleanNum(getVal(r, 'previsao'));
+                        document.getElementById('cad_rev').value = cleanNum(getVal(r, 'revertido'));
+
+                        const plats = String(getVal(r, 'plataformas') || '');
+                        document.querySelectorAll('.cb-plat').forEach(cb => cb.checked = plats.includes(cb.value));
+
+                        const icps = String(getVal(r, 'icp') || '');
+                        document.querySelectorAll('.cb-icp').forEach(cb => cb.checked = icps.includes(cb.value));
+
+                        document.getElementById('cadastroModal').classList.remove('hidden');
+                    } catch(e) { alert("Erro ao carregar dados: " + e.message); }
+                } else if(pwd) { alert("Acesso negado. Senha incorreta."); }
+            });
+        }
+
+        function fecharModal() { document.getElementById('cadastroModal').classList.add('hidden'); }
+
+        async function salvarCliente(e) {
+            e.preventDefault();
+            const plataformas = Array.from(document.querySelectorAll('.cb-plat:checked')).map(cb => cb.value).join(', ');
+            const icps = Array.from(document.querySelectorAll('.cb-icp:checked')).map(cb => cb.value).join(', ');
+
+            const obj = {
+                'CLIENTE:': document.getElementById('cad_cliente').value.toUpperCase(),
+                'Q.A.': document.getElementById('cad_qa').value,
+                'EXECUÇÃO': document.getElementById('cad_status').value,
+                'Quarter': document.getElementById('cad_quarter').value,
+                'MÊS SEM FATURAMENTO': document.getElementById('cad_mes').value,
+                'FATOR DE RISCO': document.getElementById('cad_fator').value,
+                'MOTIVO DA SOLICITAÇÃO': document.getElementById('cad_causa').value,
+                'PLATAFORMAS AFETADAS': plataformas,
+                'PERFIL ICP': icps,
+                'R$ PREVISÃO PERDA:': parseFloat(document.getElementById('cad_prev').value) || 0,
+                'R$ REVERVIDO:': parseFloat(document.getElementById('cad_rev').value) || 0
+            };
+
+            if (currentClientIndex >= 0) {
+                // Edição - Mescla os dados
+                cloudDB.fullData[currentClientIndex] = { ...cloudDB.fullData[currentClientIndex], ...obj };
+                currentClientData = cloudDB.fullData[currentClientIndex];
+            } else {
+                // Novo
+                cloudDB.fullData.unshift(obj);
+            }
+
+            fecharModal(); 
+            const salvou = await saveToCloud();
+            if (salvou) {
+                atualizarMenuQA(); 
+                atualizarFiltroMeses(); 
+                applyFilters(); 
+                
+                if (currentClientIndex >= 0) openDetail(currentClientData, currentClientIndex); // Atualiza view em tempo real
+            }
+        }
+
+        // --- DASHBOARD E TABELA ---
+        function applyFilters() {
+            const qF = document.getElementById('quarterFilter').value;
+            const mF = document.getElementById('monthFilter').value;
+            const sT = document.getElementById('searchInput').value.toLowerCase();
+            
+            const data = (cloudDB.fullData || []).filter(r => {
+                const q = String(getVal(r, 'quarter')).toUpperCase();
+                const m = formatarDataFiltro(getVal(r, 'mes'));
+                const c = String(getVal(r, 'cliente')).toLowerCase();
+                const qa = String(getVal(r, 'qa')).toLowerCase();
+                const cau = String(getVal(r, 'motivo')).toLowerCase();
+                
+                return (qF === 'ALL' || q === qF) && 
+                       (mF === 'ALL' || m === mF) && 
+                       (c.includes(sT) || qa.includes(sT) || cau.includes(sT));
+            });
+            renderKPIs(data); renderCharts(data); renderTable(data);
+        }
+
+        function renderKPIs(data) {
+            let p=0, r=0;
+            data.forEach(x => { p += cleanNum(getVal(x, 'previsao')); r += cleanNum(getVal(x, 'revertido')); });
+            const fmt = n => n.toLocaleString('pt-br', {style:'currency', currency:'BRL'});
+            document.getElementById('kpiPrev').innerText = fmt(p);
+            document.getElementById('kpiRev').innerText = fmt(r);
+            document.getElementById('kpiLoss').innerText = fmt(p-r);
+            document.getElementById('kpiProj').innerText = fmt(p*0.12);
+        }
+
+        function renderTable(data) {
+            const tb = document.getElementById('tableBody'); tb.innerHTML = '';
+            data.forEach(r => {
+                const realIndex = cloudDB.fullData.indexOf(r); 
+                
+                const status = String(getVal(r, 'execucao')).toUpperCase();
+                let trClass = "transition border-b cursor-pointer";
+                
+                if(status.includes('REVERTIDO')) trClass += " bg-emerald-50 hover:bg-emerald-100";
+                else if(status.includes('EM ANDAMENTO')) trClass += " bg-yellow-50 hover:bg-yellow-100";
+                else if(status.includes('FINALIZADO')) trClass += " bg-red-50 hover:bg-red-100";
+                else trClass += " bg-white hover:bg-slate-50";
+
+                const tr = document.createElement('tr');
+                tr.className = trClass;
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-bold text-slate-400" title="Quarter de referência">${getVal(r,'quarter')}</td>
+                    <td class="px-6 py-4 font-bold text-slate-800" title="Nome do Cliente">${getVal(r,'cliente')}</td>
+                    <td class="px-6 py-4 text-slate-500" title="Quality Assurance Responsável">${getVal(r,'qa')}</td>
+                    <td class="px-6 py-4 text-slate-500 font-medium" title="Mês/Ano de faturamento impactado">${formatarDataTabela(getVal(r,'mes'))}</td>
+                    <td class="px-6 py-4 text-[9px] font-black uppercase text-slate-600 tracking-widest" title="Fase de tratativa do cliente">${status || '-'}</td>
+                    <td class="px-6 py-4 font-mono text-slate-700" title="Valor estimado de risco financeiro">R$ ${cleanNum(getVal(r,'previsao')).toLocaleString('pt-br')}</td>
+                    <td class="px-6 py-4 text-right"><button onclick="event.stopPropagation(); deleteSingleClient('${realIndex}')" class="text-slate-400 hover:text-red-500 transition p-3" title="Excluir cliente do banco de dados"><i class="fas fa-trash-alt"></i></button></td>`;
+                tr.onclick = () => openDetail(r, realIndex);
+                tb.appendChild(tr);
+            });
+        }
+
+        function renderCharts(data) {
+            if(fChart) fChart.destroy(); if(rChart) rChart.destroy();
+            const qData = {Q1:0, Q2:0, Q3:0, Q4:0};
+            data.forEach(r => { const q = getVal(r,'quarter'); if(qData[q] !== undefined) qData[q] += cleanNum(getVal(r,'previsao')); });
+            fChart = new Chart(document.getElementById('chartFinance'), { type: 'bar', data: { labels: ['Q1','Q2','Q3','Q4'], datasets: [{ label: 'Risco', data: [qData.Q1, qData.Q2, qData.Q3, qData.Q4], backgroundColor: '#3b82f6', borderRadius: 4 }]}, options: { responsive: true, maintainAspectRatio: false }});
+            
+            const mData = {};
+            data.forEach(r => { const m = formatarDataTabela(getVal(r,'mes')); if(m !== 'N/A') mData[m] = (mData[m] || 0) + cleanNum(getVal(r, 'previsao')); });
+            
+            const sortedKeys = Object.keys(mData).sort((a,b) => {
+                const pdA = parseDateData(a); const pdB = parseDateData(b);
+                if(pdA.year !== pdB.year) return pdA.year - pdB.year;
+                return pdA.monthIdx - pdB.monthIdx;
+            });
+
+            rChart = new Chart(document.getElementById('chartLossByMonth'), { type: 'line', data: { labels: sortedKeys.map(k => k.toUpperCase()), datasets: [{ label: 'Previsão R$', data: sortedKeys.map(k => mData[k]), borderColor: '#ef4444', tension: 0.4, fill: true, backgroundColor: 'rgba(239, 68, 68, 0.05)' }]}, options: { responsive: true, maintainAspectRatio: false }});
+        }
+
+        // --- IA E DOSSIÊ ---
+        function openDetail(r, realIndex) {
+            currentClientData = r;
+            currentClientIndex = realIndex;
+            
+            // Header
+            document.getElementById('detNome').innerText = getVal(r, 'cliente') || 'N/D';
+            
+            const status = (getVal(r, 'execucao') || 'ATIVO').toUpperCase();
+            const statusBadge = document.getElementById('detStatusBadge');
+            statusBadge.innerText = status;
+            statusBadge.className = 'px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ';
+            if(status.includes('REVERTIDO')) statusBadge.className += 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30';
+            else if(status.includes('EM ANDAMENTO')) statusBadge.className += 'bg-yellow-500/20 text-yellow-100 border-yellow-400/30';
+            else if(status.includes('FINALIZADO')) statusBadge.className += 'bg-red-500/20 text-red-100 border-red-400/30';
+            else statusBadge.className += 'bg-blue-500/30 text-blue-100 border-blue-400/30';
+            
+            // Info Base Grid
+            document.getElementById('detQMobile').innerText = getVal(r, 'quarter') || '-'; // Mobile display
+            document.getElementById('detQA').innerText = getVal(r, 'qa') || 'Não informado';
+            document.getElementById('detQMes').innerText = `${getVal(r, 'quarter') || '-'} / ${formatarDataFiltro(getVal(r, 'mes'))}`;
+            document.getElementById('detPrev').innerText = cleanNum(getVal(r, 'previsao')).toLocaleString('pt-br', {style:'currency', currency:'BRL'});
+            document.getElementById('detRev').innerText = cleanNum(getVal(r, 'revertido')).toLocaleString('pt-br', {style:'currency', currency:'BRL'});
+            
+            // Risco Contexto Grid
+            document.getElementById('detFator').innerText = getVal(r, 'fator') || 'Não especificado';
+            document.getElementById('detCausa').innerText = getVal(r, 'motivo') || 'Não especificada';
+            document.getElementById('detICP').innerText = getVal(r, 'icp') || 'Não especificado';
+            document.getElementById('detPlats').innerText = getVal(r, 'plataformas') || 'Não especificadas';
+            
+            document.getElementById('detEstudo').innerText = cloudDB.studies[getVal(r, 'cliente')] || "Sem dossiê registrado.";
+            showScreen('detail');
+        }
+
+        async function generateAIAnalysis() {
+            const raw = document.getElementById('aiInput').value;
+            if(!raw) return alert("Insira o histórico da tratativa.");
+            const btn = document.getElementById('aiBtn'); btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GERANDO DOSSIÊ...';
+            setTimeout(async () => {
+                const fator = getVal(currentClientData, 'fator') || "N/D";
+                const causa = getVal(currentClientData, 'motivo') || "N/D";
+                const plats = getVal(currentClientData, 'plataformas') || "-";
+                const icp = getVal(currentClientData, 'icp') || "-";
+                
+                const dossie = `DOSSIÊ ESTRATÉGICO CS: ${getVal(currentClientData, 'cliente')}
+PERFIL DO CLIENTE (ICP): ${icp}
+
+>> DIAGNÓSTICO DO RISCO
+FATOR PRINCIPAL: ${fator}
+CAUSA RAIZ (Secundária): ${causa}
+PLATAFORMAS AFETADAS: ${plats}
+
+>> ANÁLISE DE DEFESA
+Com base nas tratativas do Q.A. ${getVal(currentClientData, 'qa')}, estruturamos este plano tático para focar na aderência da percepção de valor e sanar o ofensor principal. 
+Impacto financeiro sob risco: ${cleanNum(getVal(currentClientData, 'previsao')).toLocaleString('pt-br', {style:'currency', currency:'BRL'})}.
+
+>> RESUMO DO HISTÓRICO
+${raw.substring(0, 800)}...`;
+                
+                cloudDB.studies[getVal(currentClientData, 'cliente')] = dossie;
+                document.getElementById('detEstudo').innerText = dossie;
+                document.getElementById('aiInput').value = '';
+
+                await saveToCloud(); btn.innerHTML = 'DOSSIÊ GRAVADO';
+                setTimeout(() => btn.innerHTML = 'GERAR ESTUDO COM IA', 3000);
+            }, 1200);
+        }
+
+        function copiarDossie() { navigator.clipboard.writeText(document.getElementById('detEstudo').innerText).then(() => alert("Copiado com sucesso!")); }
+
+        function limparDossieUnico() {
+            requestPassword("Autenticação necessária para limpar o histórico do cliente.", async (pwd) => {
+                if(pwd === ADMIN_PASS) {
+                    cloudDB.studies[getVal(currentClientData, 'cliente')] = "";
+                    document.getElementById('detEstudo').innerText = "Sem dossiê registrado.";
+                    await saveToCloud();
+                } else if(pwd) { alert("Acesso negado. Senha incorreta."); }
+            });
+        }
+
+        // --- SISTEMA E AÇÕES ADMIN ---
+        function showScreen(s) { document.getElementById('dashScreen').classList.toggle('hidden', s !== 'dash'); document.getElementById('detailScreen').classList.toggle('hidden', s !== 'detail'); }
+        
+        function deleteSingleClient(idx) { 
+            requestPassword("Aviso: Esta ação apagará permanentemente o cliente.", async (pwd) => {
+                if(pwd === ADMIN_PASS) { 
+                    cloudDB.fullData.splice(idx, 1); 
+                    const sucesso = await saveToCloud();
+                    if (sucesso) { atualizarMenuQA(); atualizarFiltroMeses(); applyFilters(); }
+                }
+                else if(pwd) { alert("Acesso negado."); }
+            });
+        }
+        
+        function resetSystem() { 
+            requestPassword("ALERTA CRÍTICO: Isso limpará toda a base de dados. Confirme com a senha:", async (pwd) => {
+                if(pwd === ADMIN_PASS) { 
+                    cloudDB.fullData = []; 
+                    cloudDB.studies = {};
+                    const sucesso = await saveToCloud();
+                    if (sucesso) {
+                        atualizarMenuQA(); 
+                        atualizarFiltroMeses(); 
+                        applyFilters();
+                        alert("Banco de dados resetado com sucesso!");
+                    }
+                }
+                else if(pwd) { alert("Acesso negado."); }
+            });
+        }
+        
+        function promptImport() { 
+            // Inverte a ordem para não sofrer bloqueio do navegador
+            document.getElementById('csvInput').value = '';
+            document.getElementById('csvInput').click(); 
+        }
+        
+        function handleFileUpload(e) {
+            const file = e.target.files[0]; if(!file) return;
+            
+            requestPassword("Informe a senha de administrador para processar o arquivo CSV.", (pwd) => {
+                if(pwd === ADMIN_PASS) {
+                    setCloudLoading(true, "Processando CSV...");
+                    Papa.parse(file, { 
+                        header: true, 
+                        skipEmptyLines: true, 
+                        complete: async (res) => {
+                            cloudDB.fullData = res.data.filter(r => getVal(r,'cliente'));
+                            await saveToCloud(); 
+                            atualizarMenuQA(); 
+                            atualizarFiltroMeses(); 
+                            applyFilters();
+                            setCloudLoading(false);
+                            alert("Base de dados importada com sucesso!");
+                        }
+                    });
+                } else if(pwd) { 
+                    alert("Acesso negado. A importação foi cancelada."); 
+                    document.getElementById('csvInput').value = ''; 
+                }
+            });
+        }
+        
+        function getVal(r, k) {
+            const m = { 
+                cliente: ['CLIENTE:', 'Cliente', 'CLIENTE'], 
+                qa: ['Q.A.', 'Responsável', 'QA'], 
+                quarter: ['Quarter','QUARTER'], 
+                mes: ['MÊS SEM FATURAMENTO', 'N', 'MES'], 
+                previsao: ['R$ PREVISÃO PERDA:', 'O', 'PREVISAO'], 
+                revertido: ['R$ REVERVIDO:', 'Q', 'REVERTIDO'], 
+                motivo: ['MOTIVO DA SOLICITAÇÃO', 'Causa Raiz'], 
+                fator: ['FATOR DE RISCO', 'Fator'],
+                execucao: ['EXECUÇÃO', 'Status', 'STATUS'],
+                plataformas: ['PLATAFORMAS AFETADAS', 'PLATAFORMAS', 'Plataforma', 'C'],
+                icp: ['PERFIL ICP', 'ICP', 'Icp', 'D']
+            };
+            for(let a of (m[k] || [])) if(r[a] !== undefined) return r[a]; return '';
+        }
+        function setCloudLoading(show, text) { document.getElementById('loadingText').innerText = text; document.getElementById('cloudLoading').classList.toggle('hidden', !show); }
+    </script>
+</body>
+</html>
